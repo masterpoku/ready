@@ -622,35 +622,26 @@ import re
 from typing import List
 
 def build_username_variants(username: str) -> List[str]:
+    variants = []
 
     # spasi -> underscore
-    username = re.sub(r"\s+", "_", username.strip())
+    base = re.sub(r"\s+", "_", username.strip())
 
     # huruf + angka
-    username = re.sub(
-        r'([A-Za-z]+)(\d+)([A-Za-z]{1,2})$',
-        r'\1_\2\3',
-        username
-    )
-
+    base = re.sub(r'([A-Za-z]+)(\d+)([A-Za-z]{1,2})$', r'\1_\2\3', base)
     # huruf -> angka
-    username = re.sub(
-        r'([A-Za-z])(\d+)',
-        r'\1_\2',
-        username
-    )
-
+    base = re.sub(r'([A-Za-z])(\d+)', r'\1_\2', base)
     # angka -> huruf
-    username = re.sub(
-        r'(\d+)([A-Za-z]+)',
-        r'\1_\2',
-        username
-    )
-
+    base = re.sub(r'(\d+)([A-Za-z]+)', r'\1_\2', base)
     # rapikan underscore ganda
-    username = re.sub(r'_+', '_', username).strip('_')
+    base = re.sub(r'_+', '_', base).strip('_')
 
-    return [username]
+    variants.append(base)
+    # tambah varian cadangan dengan suffix angka
+    for i in range(2, 6):
+        variants.append(f"{base}_{i}")
+
+    return variants
 
 def click_google_button(driver, timeout=20):
     wait = WebDriverWait(driver, timeout)
@@ -1119,6 +1110,7 @@ def main():
 
         candidates = build_username_variants(keyword)
         current_keyword = None
+        created = False
 
         for candidate in candidates:
             current_keyword = candidate
@@ -1138,6 +1130,7 @@ def main():
             except Exception:
                 click_js(driver, By.CSS_SELECTOR, "#create_biolink > div:nth-child(1) > div:nth-child(1) > div:nth-child(1) > form:nth-child(2) > div:nth-child(8) > button:nth-child(1)")
 
+            # Cek notifikasi already exists
             try:
                 notif_xpath = "//*[contains(@class, 'notification') and contains(., 'already exists')]"
                 notif = WebDriverWait(driver, 4).until(
@@ -1145,28 +1138,28 @@ def main():
                 )
                 if "already exists" in notif.text:
                     print(f" URL '{candidate}' sudah terpakai. Lanjut kandidat berikutnya...")
+                    # klik area kosong di luar notif biar notif ilang
                     try:
-                        close_btn = driver.find_element(By.CSS_SELECTOR, "button.close")
-                        driver.execute_script("arguments[0].click();", close_btn)
+                        driver.execute_script("document.querySelector('.notification .close, .notification button.close')?.click()")
                     except:
                         pass
-                    try:
-                        WebDriverWait(driver, 5).until(
-                            EC.invisibility_of_element_located((By.XPATH, notif_xpath))
-                        )
-                    except:
-                        pass
-                    time.sleep(0.5)
+                    time.sleep(1)
                     continue
-
             except TimeoutException:
-                print(" Notifikasi error tidak muncul, mengecek status sukses...")
                 pass
 
             time.sleep(2)
             if "/link/" in driver.current_url:
+                created = True
                 print(f" BERHASIL! Menggunakan URL: {candidate}")
                 break
+
+        if not created:
+            print("[!] Semua kandidat URL sudah terpakai. Update sheet...")
+            update_result(ws, row, "url taken", success=False)
+            driver.quit()
+            del driver
+            return
 
         # ---- HEADING BLOCK ----
         click_js(driver, By.CSS_SELECTOR, ".flex-sm-row > div:nth-child(2) > button:nth-child(1)")
