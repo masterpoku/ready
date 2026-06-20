@@ -423,10 +423,10 @@ def login_gmail_to_profile(driver, email, password):
             except Exception:
                 click_buttons_by_text(driver, ['continue', 'lanjut', 'lanjutkan', 'ok', 'next'])
 
-            # 4. Verifikasi login berhasil
-            WebDriverWait(driver, 15).until(EC.presence_of_element_located((
-                By.XPATH, "//img[@alt='Google Account'] | //a[contains(@href, 'myaccount')]"
-            )))
+            # 4. Verifikasi login berhasil via URL
+            WebDriverWait(driver, 15).until(
+                lambda d: 'myaccount.google.com' in d.current_url
+            )
             print(f"[+] Login {email} berhasil! Session tersimpan.")
             return True
 
