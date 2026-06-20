@@ -35,7 +35,6 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 from datetime import datetime
 import random
-import socket
 import traceback
 
 
@@ -875,7 +874,7 @@ def handle_ads_flow(driver):
         pass
 
 def generate_claim_id():
-    return f"{socket.gethostname()}_{os.getpid()}_{int(time.time()*1000)}_{random.randint(1000,9999)}"
+    return f"{os.getpid()}_{int(time.time()*1000)}_{random.randint(100000,999999)}"
 
 SPREADSHEET_ID = "11y5rg2XN2rHZDeY0ktA_ly_QfGC-jE2sdH3Ol--B9xw"
 SHEET_NAME = "data"
