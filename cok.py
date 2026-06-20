@@ -676,7 +676,10 @@ def build_username_variants(username: str) -> List[str]:
     # rapikan underscore ganda
     username = re.sub(r'_+', '_', username).strip('_')
 
-    return [username]
+    variants = [username]
+    for i in range(2, 6):
+        variants.append(f"{username}_{i}")
+    return variants
 
 def click_google_button(driver, timeout=20):
     wait = WebDriverWait(driver, timeout)
@@ -1223,6 +1226,13 @@ def main():
             if "/link/" in driver.current_url:
                 print(f" BERHASIL! Menggunakan URL: {candidate}")
                 break
+
+        if "/link/" not in driver.current_url:
+            print(f"[!] Semua kandidat sudah terpakai. Update sheet...")
+            update_result(ws, row, "url taken", success=False)
+            driver.quit()
+            del driver
+            return
 
         # ---- HEADING BLOCK ----
         click_js(driver, By.CSS_SELECTOR, ".flex-sm-row > div:nth-child(2) > button:nth-child(1)")
