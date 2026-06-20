@@ -1,0 +1,6 @@
+@echo off
+echo Downloading Chrome installer...
+powershell -Command "Invoke-WebRequest -Uri 'https://dl.google.com/chrome/install/latest/chrome_installer.exe' -OutFile \"%TEMP%\chrome_installer.exe\""
+echo Installing Chrome...
+powershell -Command "Start-Process \"%TEMP%\chrome_installer.exe\""
+echo Done.
