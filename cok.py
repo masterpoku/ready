@@ -110,14 +110,14 @@ def safe_click_element(driver, element, timeout=3):
         return False
 
 
-def click_js(driver, by, selector, timeout=10):
+def click_js(driver, by, selector, timeout=15):
     for _ in range(3):
         try:
             el = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((by, selector)))
             driver.execute_script("arguments[0].click();", el)
             return
-        except StaleElementReferenceException:
-            time.sleep(0.3)
+        except (StaleElementReferenceException, TimeoutException):
+            time.sleep(1)
             continue
 
 
