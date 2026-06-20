@@ -35,6 +35,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 from datetime import datetime
 import random
+import socket
 import traceback
 
 
@@ -874,7 +875,7 @@ def handle_ads_flow(driver):
         pass
 
 def generate_claim_id():
-    return f"{os.getpid()}_{int(time.time()*1000)}_{random.randint(100000,999999)}"
+    return f"{socket.gethostname()}_{os.getpid()}_{int(time.time()*1000)}_{random.randint(1000,9999)}"
 
 SPREADSHEET_ID = "11y5rg2XN2rHZDeY0ktA_ly_QfGC-jE2sdH3Ol--B9xw"
 SHEET_NAME = "data"
@@ -1133,15 +1134,6 @@ def main():
             del driver
             return
 
-        # Verifikasi claim masih milik kita setelah login Gmail
-        current_claim = (ws.acell(f"B{row}").value or '').strip()
-        if current_claim != claim_id:
-            print(f"[!] Row {row} diambil alih bot lain ({current_claim}), membatalkan...")
-            update_result(ws, row, "taken", success=False)
-            driver.quit()
-            del driver
-            return
-
         wait = WebDriverWait(driver, 20)
         
         driver.get("https://official.link/register")
@@ -1154,7 +1146,7 @@ def main():
         except:
             pass
 
-        # Verifikasi claim lagi setelah login Google
+        # Verifikasi claim setelah OAuth — kalau masih milik kita, ganti ke Process
         current_claim = (ws.acell(f"B{row}").value or '').strip()
         if current_claim != claim_id:
             print(f"[!] Row {row} diambil alih bot lain setelah OAuth ({current_claim}), membatalkan...")
@@ -1162,6 +1154,10 @@ def main():
             driver.quit()
             del driver
             return
+
+        ws.update_acell(f"B{row}", "Process")
+        ws.format(f"B{row}", {"backgroundColor": {"red": 1, "green": 1, "blue": 0}})
+        print(f"[+] Row {row} dikunci dengan status 'Process'.")
 
         delete_all_links(driver)
         driver.get("https://official.link/dashboard")
