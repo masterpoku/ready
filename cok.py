@@ -386,38 +386,50 @@ def login_gmail_to_profile(driver, email, password):
         time.sleep(4)
 
         try:
-            click_buttons_by_text(driver, ['continue', 'lanjut', 'lanjutkan', 'ok', 'next', 'setuju', 'terima', 'izinkan', 'i understand', 'saya mengerti'])
-
-            # Handle Google ToS speedbump — checkbox + "I understand" button
-            handled_tos = driver.execute_script("""
-                var cb = document.querySelector('input[type="checkbox"][aria-label*="understand"], input[type="checkbox"][aria-label*="mengerti"], div[role="checkbox"]');
-                if (cb) {
-                    if (cb.getAttribute('aria-checked') !== 'true' && !cb.checked) {
-                        cb.click();
-                    }
-                }
-                var btns = document.querySelectorAll('button, div[role="button"], a');
-                for (var b of btns) {
-                    var t = (b.innerText || '').toLowerCase().trim();
-                    if (t.includes('i understand') || t.includes('saya mengerti')) {
-                        if (!b.disabled) {
-                            b.click();
-                            return 'clicked';
-                        }
-                    }
-                }
-                return 'not_found';
-            """)
-            if handled_tos == 'clicked':
-                print("[+] Tombol I understand diklik")
+            # 1. Cek & Klik Tombol `#confirm` (Jika ada)
+            try:
+                confirm_btn = WebDriverWait(driver, 3).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, "#confirm"))
+                )
+                safe_click(driver, confirm_btn)
+                print("[+] Tombol #confirm berhasil diklik")
                 time.sleep(2)
+            except:
+                pass
 
-            WebDriverWait(driver, 15).until(
-                lambda d: 'myaccount.google.com' in d.current_url or 'mail.google.com' in d.current_url
-            )
+            # 2. Cek & Klik Tombol "I understand" / "Saya mengerti" (Jika ada)
+            try:
+                understand_btn = WebDriverWait(driver, 3).until(
+                    EC.element_to_be_clickable((By.XPATH,
+                        "//button[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'understand')] | "
+                        "//button[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'mengerti')] | "
+                        "//span[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'understand')] | "
+                        "//span[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'mengerti')]"
+                    ))
+                )
+                safe_click(driver, understand_btn)
+                print("[+] Tombol 'I understand / Mengerti' berhasil diklik")
+                time.sleep(2)
+            except:
+                pass
+
+            # 3. Klik tombol Continue / Lanjut
+            try:
+                cont = driver.find_element(By.CSS_SELECTOR, "#yDmH0d > c-wiz > main > div.JYXaTc.F8PBrb > div > div > div:nth-child(2) > div > div > button > span")
+                try:
+                    safe_click_element(driver, cont)
+                except Exception:
+                    pass
+            except Exception:
+                click_buttons_by_text(driver, ['continue', 'lanjut', 'lanjutkan', 'ok', 'next'])
+
+            # 4. Verifikasi login berhasil
+            WebDriverWait(driver, 15).until(EC.presence_of_element_located((
+                By.XPATH, "//img[@alt='Google Account'] | //a[contains(@href, 'myaccount')]"
+            )))
             print(f"[+] Login {email} berhasil! Session tersimpan.")
             return True
-            
+
         except Exception as e:
             try:
                 cur_url = driver.current_url
@@ -730,15 +742,7 @@ def click_google_button(driver, timeout=20):
             except:
                 pass
 
-            # cara 1 -> JS click (paling ampuh untuk element tertutup overlay)
-            try:
-                driver.execute_script("arguments[0].click();", element)
-                print(f"Clicked with JS -> {xpath}")
-                return True
-            except Exception as e:
-                last_error = e
-
-            # cara 2 -> klik normal
+            # cara 1 -> klik normal
             try:
                 wait.until(
                     EC.element_to_be_clickable((By.XPATH, xpath))
@@ -750,7 +754,7 @@ def click_google_button(driver, timeout=20):
             except:
                 pass
 
-            # cara 3 -> ActionChains
+            # cara 2 -> ActionChains
             try:
                 ActionChains(driver)\
                     .move_to_element(element)\
@@ -763,6 +767,15 @@ def click_google_button(driver, timeout=20):
 
             except:
                 pass
+
+            # cara 3 -> JS click (paling ampuh untuk element tertutup overlay)
+            try:
+                driver.execute_script("arguments[0].click();", element)
+                print(f"Clicked with JS -> {xpath}")
+                return True
+
+            except Exception as e:
+                last_error = e
 
         except Exception as e:
             last_error = e
@@ -829,24 +842,15 @@ def _handle_oauth_flow(driver, main_window, timeout=30):
 def login_with_google(driver):
     wait = WebDriverWait(driver, 20)
     print(f"{datetime.now().strftime('%H:%M:%S')} Mencari tombol Sign in with Google...")
-    if not click_google_button(driver):
-        print("[!] Gagal klik tombol Google")
-        return
+    click_google_button(driver)
 
+    time.sleep(3)
     main_window = driver.current_window_handle
-    old_count = len(driver.window_handles)
-
-    print(f"{datetime.now().strftime('%H:%M:%S')} Menunggu popup Google...")
-    try:
-        WebDriverWait(driver, 10).until(lambda d: len(d.window_handles) > old_count)
-        for handle in driver.window_handles:
-            if handle != main_window:
-                driver.switch_to.window(handle)
-                break
-        print(f"[+] Beralih ke popup Google")
-    except:
-        print(f"[!] Popup tidak muncul, cek URL tab utama")
-        pass
+    all_windows = driver.window_handles
+    for handle in all_windows:
+        if handle != main_window:
+            driver.switch_to.window(handle)
+            break
 
     print(f"{datetime.now().strftime('%H:%M:%S')} Memilih akun Google pertama...")
     try:
