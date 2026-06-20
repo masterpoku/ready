@@ -1149,8 +1149,7 @@ def main():
         # Verifikasi claim setelah OAuth — kalau masih milik kita, ganti ke Process
         current_claim = (ws.acell(f"B{row}").value or '').strip()
         if current_claim != claim_id:
-            print(f"[!] Row {row} diambil alih bot lain setelah OAuth ({current_claim}), membatalkan...")
-            update_result(ws, row, "taken", success=False)
+            print(f"[!] Row {row} diambil alih bot lain ({current_claim}), skip.")
             driver.quit()
             del driver
             return
