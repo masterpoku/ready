@@ -1050,6 +1050,27 @@ def buat_driver_aman():
 # ==========================================================
 
 def main():
+    # Auto-update dari GitHub
+    try:
+        print(f"{datetime.now().strftime('%H:%M:%S')} Auto-update: git pull...")
+        result = subprocess.run(
+            ["git", "pull"],
+            capture_output=True, text=True, timeout=30,
+            cwd=os.path.dirname(os.path.abspath(__file__))
+        )
+        if result.returncode == 0:
+            if "Already up to date" in result.stdout:
+                print("[+] Script sudah versi terbaru")
+            else:
+                print("[+] Script diupdate, pull ulang:")
+                for line in result.stdout.strip().split('\n'):
+                    if line.strip():
+                        print(f"    {line.strip()}")
+        else:
+            print(f"[!] Gagal git pull: {result.stderr.strip()}")
+    except Exception as e:
+        print(f"[!] Auto-update skip: {e}")
+
     print(f"{datetime.now().strftime('%H:%M:%S')} Memulai proses official.link di Windows...")
     data, row, ws = get_data()
     if not data:
