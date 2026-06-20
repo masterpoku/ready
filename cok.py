@@ -35,6 +35,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 from datetime import datetime
 import random
+import socket
 import traceback
 
 
@@ -385,7 +386,32 @@ def login_gmail_to_profile(driver, email, password):
         time.sleep(4)
 
         try:
-            click_buttons_by_text(driver, ['continue', 'lanjut', 'lanjutkan', 'ok', 'next', 'setuju', 'terima', 'izinkan'])
+            click_buttons_by_text(driver, ['continue', 'lanjut', 'lanjutkan', 'ok', 'next', 'setuju', 'terima', 'izinkan', 'i understand', 'saya mengerti'])
+
+            # Handle Google ToS speedbump — checkbox + "I understand" button
+            handled_tos = driver.execute_script("""
+                var cb = document.querySelector('input[type="checkbox"][aria-label*="understand"], input[type="checkbox"][aria-label*="mengerti"], div[role="checkbox"]');
+                if (cb) {
+                    if (cb.getAttribute('aria-checked') !== 'true' && !cb.checked) {
+                        cb.click();
+                    }
+                }
+                var btns = document.querySelectorAll('button, div[role="button"], a');
+                for (var b of btns) {
+                    var t = (b.innerText || '').toLowerCase().trim();
+                    if (t.includes('i understand') || t.includes('saya mengerti')) {
+                        if (!b.disabled) {
+                            b.click();
+                            return 'clicked';
+                        }
+                    }
+                }
+                return 'not_found';
+            """)
+            if handled_tos == 'clicked':
+                print("[+] Tombol I understand diklik")
+                time.sleep(2)
+
             WebDriverWait(driver, 15).until(
                 lambda d: 'myaccount.google.com' in d.current_url or 'mail.google.com' in d.current_url
             )
@@ -848,6 +874,9 @@ def handle_ads_flow(driver):
     except Exception:
         pass
 
+def generate_claim_id():
+    return f"{socket.gethostname()}_{os.getpid()}_{int(time.time()*1000)}_{random.randint(1000,9999)}"
+
 SPREADSHEET_ID = "11y5rg2XN2rHZDeY0ktA_ly_QfGC-jE2sdH3Ol--B9xw"
 SHEET_NAME = "data"
 
@@ -859,17 +888,24 @@ def get_data():
         records = ws.get_all_records()
         for i, rec in enumerate(records, start=2):
             if not str(rec.get("Short", "")).strip():
-                ws.update_acell(f"B{i}", "Process")
-                ws.format(f"B{i}", {
-                    "backgroundColor": {"red": 1, "green": 1, "blue": 0}
-                })
-                print(f"[+] Row {i} dikunci dengan status 'Process'.")
-                return rec, i, ws
+                claim_id = generate_claim_id()
+                ws.update_acell(f"B{i}", claim_id)
+                time.sleep(0.5)
+                current = (ws.acell(f"B{i}").value or '').strip()
+                if current == claim_id:
+                    ws.format(f"B{i}", {
+                        "backgroundColor": {"red": 1, "green": 1, "blue": 0}
+                    })
+                    print(f"[+] Row {i} dikunci dengan claim ID: {claim_id}")
+                    return rec, i, ws, claim_id
+                else:
+                    print(f"[!] Row {i} diambil bot lain ({current}), coba row berikutnya...")
+                    continue
         print("[!] Semua baris sudah terisi.")
-        return None, None, None
+        return None, None, None, None
     except Exception as e:
         print(f"[!] Error get_data: {e}")
-        return None, None, None
+        return None, None, None, None
 
 def update_result(ws, row, result_url, success=True):
     try:
@@ -1071,7 +1107,7 @@ def main():
         print(f"[!] Auto-update skip: {e}")
 
     print(f"{datetime.now().strftime('%H:%M:%S')} Memulai proses official.link di Windows...")
-    data, row, ws = get_data()
+    data, row, ws, claim_id = get_data()
     if not data:
         return
 
@@ -1097,6 +1133,16 @@ def main():
             driver.quit()
             del driver
             return
+
+        # Verifikasi claim masih milik kita setelah login Gmail
+        current_claim = (ws.acell(f"B{row}").value or '').strip()
+        if current_claim != claim_id:
+            print(f"[!] Row {row} diambil alih bot lain ({current_claim}), membatalkan...")
+            update_result(ws, row, "taken", success=False)
+            driver.quit()
+            del driver
+            return
+
         wait = WebDriverWait(driver, 20)
         
         driver.get("https://official.link/register")
@@ -1108,6 +1154,16 @@ def main():
             wait.until(EC.url_contains("/dashboard"))
         except:
             pass
+
+        # Verifikasi claim lagi setelah login Google
+        current_claim = (ws.acell(f"B{row}").value or '').strip()
+        if current_claim != claim_id:
+            print(f"[!] Row {row} diambil alih bot lain setelah OAuth ({current_claim}), membatalkan...")
+            update_result(ws, row, "taken", success=False)
+            driver.quit()
+            del driver
+            return
+
         delete_all_links(driver)
         driver.get("https://official.link/dashboard")
 
@@ -1266,8 +1322,20 @@ def main():
         if driver:
             try: 
                 driver.quit()
-                del driver # Hapus juga di blok exception
+                del driver
             except: 
+                pass
+
+    finally:
+        # Bersihkan claim ID jika masih milik kita (crash sebelum update)
+        if ws and row and claim_id:
+            try:
+                current = (ws.acell(f"B{row}").value or '').strip()
+                if current == claim_id:
+                    ws.update_acell(f"B{row}", "")
+                    ws.format(f"B{row}", {"backgroundColor": {"red": 0.8, "green": 0.8, "blue": 0.8}})
+                    print(f"[!] Claim ID stale dihapus dari row {row}")
+            except Exception:
                 pass
 
 if __name__ == "__main__":
