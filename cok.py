@@ -1124,6 +1124,12 @@ def main():
             current_keyword = candidate
             print(f" Mencoba kandidat: {candidate}")
 
+            # Tutup notifikasi/sisa overlay dari percobaan sebelumnya
+            try:
+                driver.execute_script("document.querySelectorAll('.notification, .modal-backdrop, .toast, .alert').forEach(e=>e.remove())")
+            except:
+                pass
+
             url_input = wait.until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "#biolink_url"))
             )
