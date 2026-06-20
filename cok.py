@@ -667,20 +667,28 @@ def click_google_button(driver, timeout=20):
 
     for xpath in xpaths:
         try:
-            # tunggu element muncul
             element = wait.until(
                 EC.presence_of_element_located((By.XPATH, xpath))
             )
 
-            # scroll ke tengah
-            driver.execute_script(
-                "arguments[0].scrollIntoView({block:'center'});",
-                element
-            )
-
+            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", element)
             time.sleep(1)
 
-            # cara 1 -> klik normal
+            # Hapus overlay yang menghalangi
+            try:
+                driver.execute_script("document.querySelectorAll('div[class*=\"modal\"], div[class*=\"overlay\"], div[class*=\"backdrop\"]').forEach(e=>e.remove())")
+            except:
+                pass
+
+            # cara 1 -> JS click (paling ampuh untuk element tertutup overlay)
+            try:
+                driver.execute_script("arguments[0].click();", element)
+                print(f"Clicked with JS -> {xpath}")
+                return True
+            except Exception as e:
+                last_error = e
+
+            # cara 2 -> klik normal
             try:
                 wait.until(
                     EC.element_to_be_clickable((By.XPATH, xpath))
@@ -692,7 +700,7 @@ def click_google_button(driver, timeout=20):
             except:
                 pass
 
-            # cara 2 -> ActionChains
+            # cara 3 -> ActionChains
             try:
                 ActionChains(driver)\
                     .move_to_element(element)\
@@ -705,19 +713,6 @@ def click_google_button(driver, timeout=20):
 
             except:
                 pass
-
-            # cara 3 -> JS click (paling ampuh)
-            try:
-                driver.execute_script(
-                    "arguments[0].click();",
-                    element
-                )
-
-                print(f"Clicked with JS -> {xpath}")
-                return True
-
-            except Exception as e:
-                last_error = e
 
         except Exception as e:
             last_error = e
@@ -1050,24 +1045,28 @@ def buat_driver_aman():
 # ==========================================================
 
 def main():
-    # Auto-update dari GitHub
+    # Auto-update via raw GitHub (tanpa git)
     try:
-        print(f"{datetime.now().strftime('%H:%M:%S')} Auto-update: git pull...")
-        result = subprocess.run(
-            ["git", "pull"],
-            capture_output=True, text=True, timeout=30,
-            cwd=os.path.dirname(os.path.abspath(__file__))
-        )
-        if result.returncode == 0:
-            if "Already up to date" in result.stdout:
-                print("[+] Script sudah versi terbaru")
-            else:
-                print("[+] Script diupdate, pull ulang:")
-                for line in result.stdout.strip().split('\n'):
-                    if line.strip():
-                        print(f"    {line.strip()}")
+        print(f"{datetime.now().strftime('%H:%M:%S')} Auto-update...")
+        base = "https://raw.githubusercontent.com/masterpoku/ready/main"
+        files = {"cok.py": __file__, "reset_password.py": os.path.join(os.path.dirname(__file__), "reset_password.py")}
+        updated = []
+        for name, path in files.items():
+            if not os.path.exists(path):
+                continue
+            r = requests.get(f"{base}/{name}", timeout=15)
+            if r.status_code == 200:
+                new_content = r.text
+                with open(path, "r", encoding="utf-8") as f:
+                    old_content = f.read()
+                if new_content != old_content:
+                    with open(path, "w", encoding="utf-8") as f:
+                        f.write(new_content)
+                    updated.append(name)
+        if updated:
+            print(f"[+] Script diupdate: {', '.join(updated)}")
         else:
-            print(f"[!] Gagal git pull: {result.stderr.strip()}")
+            print("[+] Script sudah versi terbaru")
     except Exception as e:
         print(f"[!] Auto-update skip: {e}")
 
