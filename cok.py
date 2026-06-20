@@ -649,36 +649,57 @@ from typing import List
 
 def build_username_variants(username: str) -> List[str]:
 
-    # spasi -> underscore
-    username = re.sub(r"\s+", "_", username.strip())
+    base = re.sub(r"\s+", "_", username.strip())
+    base = re.sub(r'_+', '_', base).strip('_')
+    seen = set()
+    variants = []
 
-    # huruf + angka
-    username = re.sub(
-        r'([A-Za-z]+)(\d+)([A-Za-z]{1,2})$',
-        r'\1_\2\3',
-        username
-    )
+    def add(v):
+        v = re.sub(r'_+', '_', v).strip('_')
+        if v and v not in seen:
+            seen.add(v)
+            variants.append(v)
 
-    # huruf -> angka
-    username = re.sub(
-        r'([A-Za-z])(\d+)',
-        r'\1_\2',
-        username
-    )
+    add(base)
 
-    # angka -> huruf
-    username = re.sub(
-        r'(\d+)([A-Za-z]+)',
-        r'\1_\2',
-        username
-    )
+    # tanpa underscore
+    no_underscore = base.replace('_', '')
+    if no_underscore != base:
+        add(no_underscore)
 
-    # rapikan underscore ganda
-    username = re.sub(r'_+', '_', username).strip('_')
+    # aturan 1: huruf+angka+huruf di akhir
+    r1 = re.sub(r'([A-Za-z]+)(\d+)([A-Za-z]{1,2})$', r'\1_\2\3', base)
+    add(r1)
 
-    variants = [username]
-    for i in range(2, 6):
-        variants.append(f"{username}_{i}")
+    # aturan 2: huruf diikuti angka
+    r2 = re.sub(r'([A-Za-z])(\d+)', r'\1_\2', base)
+    add(r2)
+
+    # aturan 3: angka diikuti huruf
+    r3 = re.sub(r'(\d+)([A-Za-z]+)', r'\1_\2', base)
+    add(r3)
+
+    # semua aturan
+    all_rules = base
+    all_rules = re.sub(r'([A-Za-z]+)(\d+)([A-Za-z]{1,2})$', r'\1_\2\3', all_rules)
+    all_rules = re.sub(r'([A-Za-z])(\d+)', r'\1_\2', all_rules)
+    all_rules = re.sub(r'(\d+)([A-Za-z]+)', r'\1_\2', all_rules)
+    add(all_rules)
+
+    # no-underscore + semua aturan
+    if no_underscore != base:
+        r1n = re.sub(r'([A-Za-z]+)(\d+)([A-Za-z]{1,2})$', r'\1_\2\3', no_underscore)
+        add(r1n)
+        r2n = re.sub(r'([A-Za-z])(\d+)', r'\1_\2', no_underscore)
+        add(r2n)
+        r3n = re.sub(r'(\d+)([A-Za-z]+)', r'\1_\2', no_underscore)
+        add(r3n)
+        all_n = no_underscore
+        all_n = re.sub(r'([A-Za-z]+)(\d+)([A-Za-z]{1,2})$', r'\1_\2\3', all_n)
+        all_n = re.sub(r'([A-Za-z])(\d+)', r'\1_\2', all_n)
+        all_n = re.sub(r'(\d+)([A-Za-z]+)', r'\1_\2', all_n)
+        add(all_n)
+
     return variants
 
 def click_google_button(driver, timeout=20):
