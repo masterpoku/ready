@@ -711,6 +711,11 @@ def build_username_variants(username: str) -> List[str]:
         all_n = re.sub(r'([A-Za-z])(\d+)', r'\1_\2', all_n)
         all_n = re.sub(r'(\d+)([A-Za-z]+)', r'\1_\2', all_n)
         add(all_n)
+
+    # varian dash (-) dari setiap varian underscore
+    for v in list(variants):
+        if '_' in v:
+            add(v.replace('_', '-'))
     return variants
 
 
@@ -1165,6 +1170,17 @@ def main():
     title = data["title"]
     desc = data["DESC"]
 
+    # PRE-FILTER KANDIDAT SEBELUM BUKA BROWSER
+    candidates = build_username_variants(keyword)
+    print(f"[*] Pre-filter {len(candidates)} kandidat via HTTP check...")
+    available = filter_available(candidates)
+    if not available:
+        print(f"[!] Semua kandidat sudah terpakai. Update sheet...")
+        update_result(ws, row, "url taken", success=False)
+        return
+    current_keyword = available[0]
+    print(f"[+] Kandidat tersedia: {current_keyword}")
+
     print(f"{datetime.now().strftime('%H:%M:%S')} Membuka browser...")
     driver = buat_driver_aman()
     if driver is None:
@@ -1212,18 +1228,6 @@ def main():
 
         click_js(driver, By.CSS_SELECTOR, "div.show:nth-child(2) > a:nth-child(1)")
         time.sleep(2)
-
-        candidates = build_username_variants(keyword)
-        print(f"[*] Pre-filter {len(candidates)} kandidat via HTTP check...")
-        available = filter_available(candidates)
-        if not available:
-            print(f"[!] Semua kandidat sudah terpakai. Update sheet...")
-            update_result(ws, row, "url taken", success=False)
-            driver.quit()
-            del driver
-            return
-        current_keyword = available[0]
-        print(f"[+] Kandidat tersedia: {current_keyword}")
 
         url_input = wait.until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "#biolink_url"))
