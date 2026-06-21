@@ -711,8 +711,26 @@ def build_username_variants(username: str) -> List[str]:
         all_n = re.sub(r'([A-Za-z])(\d+)', r'\1_\2', all_n)
         all_n = re.sub(r'(\d+)([A-Za-z]+)', r'\1_\2', all_n)
         add(all_n)
-
     return variants
+
+
+def filter_available(candidates: List[str]) -> List[str]:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Referer": "https://google.com",
+    }
+    available = []
+    for c in candidates:
+        try:
+            r = requests.get(f"https://official.link/{c}", headers=headers, timeout=10)
+            if r.status_code == 404:
+                available.append(c)
+        except:
+            continue
+    return available
+
 
 def click_google_button(driver, timeout=20):
     wait = WebDriverWait(driver, timeout)
@@ -1196,65 +1214,36 @@ def main():
         time.sleep(2)
 
         candidates = build_username_variants(keyword)
-        current_keyword = None
-
-        for candidate in candidates:
-            current_keyword = candidate
-            print(f" Mencoba kandidat: {candidate}")
-
-            # Tutup notifikasi/sisa overlay dari percobaan sebelumnya
-            try:
-                driver.execute_script("document.querySelectorAll('.notification, .modal-backdrop, .toast, .alert').forEach(e=>e.remove())")
-            except:
-                pass
-
-            url_input = wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "#biolink_url"))
-            )
-            driver.execute_script("arguments[0].value = '';", url_input)
-            time.sleep(0.3)
-            set_text_input(driver, url_input, candidate)
-            time.sleep(2)
-
-            create_btn_sel = "#create_biolink form button[type='submit'], #create_biolink .btn-primary"
-            try:
-                click_js(driver, By.CSS_SELECTOR, create_btn_sel, timeout=5)
-            except Exception:
-                click_js(driver, By.CSS_SELECTOR, "#create_biolink > div:nth-child(1) > div:nth-child(1) > div:nth-child(1) > form:nth-child(2) > div:nth-child(8) > button:nth-child(1)")
-
-            try:
-                notif_xpath = "//*[contains(@class, 'notification') and contains(., 'already exists')]"
-                notif = WebDriverWait(driver, 4).until(
-                    EC.presence_of_element_located((By.XPATH, notif_xpath))
-                )
-                if "already exists" in notif.text:
-                    print(f" URL '{candidate}' sudah terpakai. Lanjut kandidat berikutnya...")
-                    try:
-                        close_btn = driver.find_element(By.CSS_SELECTOR, "button.close")
-                        driver.execute_script("arguments[0].click();", close_btn)
-                    except:
-                        pass
-                    try:
-                        WebDriverWait(driver, 5).until(
-                            EC.invisibility_of_element_located((By.XPATH, notif_xpath))
-                        )
-                    except:
-                        pass
-                    time.sleep(0.5)
-                    continue
-
-            except TimeoutException:
-                print(" Notifikasi error tidak muncul, mengecek status sukses...")
-                pass
-
-            time.sleep(2)
-            if "/link/" in driver.current_url:
-                print(f" BERHASIL! Menggunakan URL: {candidate}")
-                break
-
-        if "/link/" not in driver.current_url:
+        print(f"[*] Pre-filter {len(candidates)} kandidat via HTTP check...")
+        available = filter_available(candidates)
+        if not available:
             print(f"[!] Semua kandidat sudah terpakai. Update sheet...")
             update_result(ws, row, "url taken", success=False)
+            driver.quit()
+            del driver
+            return
+        current_keyword = available[0]
+        print(f"[+] Kandidat tersedia: {current_keyword}")
+
+        url_input = wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "#biolink_url"))
+        )
+        driver.execute_script("arguments[0].value = '';", url_input)
+        time.sleep(0.3)
+        set_text_input(driver, url_input, current_keyword)
+        time.sleep(2)
+
+        create_btn_sel = "#create_biolink form button[type='submit'], #create_biolink .btn-primary"
+        try:
+            click_js(driver, By.CSS_SELECTOR, create_btn_sel, timeout=5)
+        except Exception:
+            click_js(driver, By.CSS_SELECTOR, "#create_biolink > div:nth-child(1) > div:nth-child(1) > div:nth-child(1) > form:nth-child(2) > div:nth-child(8) > button:nth-child(1)")
+
+        time.sleep(2)
+
+        if "/link/" not in driver.current_url:
+            print(f"[!] Gagal create biolink untuk {current_keyword}. Update sheet...")
+            update_result(ws, row, "create failed", success=False)
             driver.quit()
             del driver
             return
